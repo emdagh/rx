@@ -17,24 +17,19 @@ using namespace std::literals;
 #define DEBUG_METHOD()                                                         \
   std::cout << __PRETTY_FUNCTION__ << " @ " << this << std::endl
 #define DEBUG_VALUE_OF(x) std::cout << #x << "=" << x << std::endl
-template <typename F>
-void call_async(F &&fun) {
+template <typename F> void call_async(F &&fun) {
   auto futptr = std::make_shared<std::future<
       void>>(); // passing this by value to the lambda will increment the
                 // counter and ensure completion, even after going oos
-  *futptr = std::async(std::launch::async, [futptr, fun]() {
-    fun();
-  });
+  *futptr = std::async(std::launch::async, [futptr, fun]() { fun(); });
 }
 
 namespace rx {
 struct on_complete : public std::exception {};
 
-template <typename T>
-using observer = std::function<void(const T &)>;
+template <typename T> using observer = std::function<void(const T &)>;
 
-template <typename T>
-class observable {
+template <typename T> class observable {
 public:
   using observer_t = observer<T>;
   using completer_t = std::function<void()>;
@@ -52,37 +47,27 @@ private:
       return;
     }
   }
-  void subscribe_impl(const completer_t &obj) {
-    _completers.push_back(obj);
-  }
+  void subscribe_impl(const completer_t &obj) { _completers.push_back(obj); }
 
 public:
-  observable(subscribe_callback fun) : _subscribe_callback(fun) {
-  }
-
-  // observable(observable *ptr) : _subscribe_callback(ptr->_subscribe_callback)
-  // {
-  // }
+  observable(subscribe_callback fun) : _subscribe_callback(fun) {}
 
   observable(const observable &other)
-      : _subscribe_callback(other._subscribe_callback) {
-  }
+      : _subscribe_callback(other._subscribe_callback) {}
   observable operator=(const observable &) const = delete;
 
   virtual ~observable() {
     // DEBUG_METHOD();
   }
 
-  template <typename... Ts>
-  void subscribe(Ts &&...ts) {
+  template <typename... Ts> void subscribe(Ts &&...ts) {
     (subscribe_impl(std::forward<Ts>(ts)), ...);
 
     for (auto complete : _completers) {
       complete();
     }
   }
-  template <typename Pred>
-  auto filter(Pred &&pred) {
+  template <typename Pred> auto filter(Pred &&pred) {
     return make_shared_observable<T>([this, pred](const observer_t &obs) {
       this->subscribe([pred, obs](const T &t) {
         if (pred(t)) {
@@ -92,8 +77,7 @@ public:
     });
   }
 
-  template <typename Period>
-  auto delay(const Period &a_while) {
+  template <typename Period> auto delay(const Period &a_while) {
     return make_shared_observable<T>([=](const observer_t &obs) {
       this->subscribe([=](const T &t) {
         std::this_thread::sleep_for(a_while);
@@ -102,8 +86,7 @@ public:
     });
   }
 
-  template <typename Period>
-  auto debounce(const Period &timeout) {
+  template <typename Period> auto debounce(const Period &timeout) {
     using clock_t = std::chrono::steady_clock;
     return make_shared_observable<T>([this, timeout](const observer_t &obs) {
       auto last_time = clock_t::now();
@@ -122,28 +105,20 @@ public:
     });
   }
 
-  template <typename F>
-  auto map(F &&fun) {
+  template <typename F> auto map(F &&fun) {
     return make_shared_observable<T>([this, fun](const observer_t &obs) {
-      this->subscribe([=](const T &t) {
-        obs(fun(t));
-      });
+      this->subscribe([=](const T &t) { obs(fun(t)); });
     });
   }
 
-  template <typename F>
-  auto reduce(F &&fun, T seed = T{0}) {
+  template <typename F> auto reduce(F &&fun, T seed = T{0}) {
     return make_shared_observable<T>([this, fun, seed](const observer_t &obs) {
       T result = seed;
       this->subscribe(
           // next
-          [=, &result](const T &t) {
-            result = fun(result, t);
-          },
+          [=, &result](const T &t) { result = fun(result, t); },
           // completed
-          [&] {
-            obs(result);
-          });
+          [&] { obs(result); });
     });
   }
 
@@ -161,13 +136,8 @@ public:
   auto last() {
     return make_shared_observable<T>([this](const observer_t &next) {
       T last;
-      this->subscribe(
-          [next, &last](const T &value) {
-            last = value;
-          },
-          [next, &last] {
-            next(last);
-          });
+      this->subscribe([next, &last](const T &value) { last = value; },
+                      [next, &last] { next(last); });
     });
   }
 
@@ -218,8 +188,7 @@ public:
   template <typename U>
   using Mapper = std::function<std::shared_ptr<observable<U>>(const T &)>;
 
-  template <typename U>
-  auto flat_map(Mapper<U> &&mapper) {
+  template <typename U> auto flat_map(Mapper<U> &&mapper) {
 #if 0
     return make_shared_observable<U>(
         [this, mapper](std::function<void(const U &)> on_next) {
@@ -247,8 +216,7 @@ public:
 #endif
   }
 
-  template <typename Period>
-  auto sample(Period period) {
+  template <typename Period> auto sample(Period period) {
     using clock_t = std::chrono::steady_clock;
 
     return make_shared_observable<T>([this, period](const observer_t &obs) {
@@ -260,6 +228,20 @@ public:
         }
       });
     });
+  }
+
+  template <typename Predicate> auto skip_while(Predicate predicate) {
+    return make_shared_observable<T>(
+        [this, predicate](const observer_t &on_next) {
+          bool is_skipping = true;
+          this->subscribe([predicate, on_next, &is_skipping](const T &value) {
+            if (is_skipping && predicate(value)) {
+              return;
+            }
+            is_skipping = false;
+            on_next(value);
+          });
+        });
   }
 
   template <typename U, typename... Ts>
@@ -280,8 +262,7 @@ static auto interval(const Period &a_while) {
         }
       });
 }
-template <typename T>
-static auto repeat(T value, size_t count) {
+template <typename T> static auto repeat(T value, size_t count) {
   return observable<T>::template make_shared_observable<T>(
       [=](const observer<T> &next) {
         for (size_t i = 0; i < count; i++) {
@@ -290,8 +271,7 @@ static auto repeat(T value, size_t count) {
       });
 }
 
-template <typename Iterable>
-auto from(Iterable iterable) {
+template <typename Iterable> auto from(Iterable iterable) {
   using T = typename std::remove_reference<decltype(*iterable.begin())>::type;
   return observable<T>::template make_shared_observable<T>(
       [iterable](const typename observable<T>::observer_t next) {
@@ -301,8 +281,7 @@ auto from(Iterable iterable) {
       });
 }
 
-template <typename... Ts>
-auto of(Ts &&...ts) {
+template <typename... Ts> auto of(Ts &&...ts) {
   using T = typename std::common_type<Ts...>::type;
   return observable<T>::template make_shared_observable<T>(
       [ts...](const typename observable<T>::observer_t next) {
@@ -312,8 +291,7 @@ auto of(Ts &&...ts) {
         }
       });
 }
-template <typename T>
-static auto range(T start, T count) {
+template <typename T> static auto range(T start, T count) {
   return observable<T>::template make_shared_observable<T>(
       [start, count](const observer<T> &obs) {
         for (T i = start; i < start + count; ++i) {
@@ -321,35 +299,19 @@ static auto range(T start, T count) {
         }
       });
 }
-
-/*template <typename T, typename Iterable>
-static auto from(Iterable iter) {
-  return make_shared_observable<T>(
-      [iter = std::move(iter)](const observer_t &obs) {
-        for (const auto &it : iter) {
-          obs(it);
-        }
-      });
-}*/
 } // namespace rx
 
 int main() {
   std::atomic<bool> is_done = false;
 
   rx::of(1, 2, 3, 4, 5, 6, 7)
-      ->subscribe(
-          [](int i) {
-            DEBUG_VALUE_OF(i);
-          },
-          [] {
-            std::cout << "done!" << std::endl;
-          });
+      ->subscribe([](int i) { DEBUG_VALUE_OF(i); },
+                  [] { std::cout << "done!" << std::endl; });
 
   rx::range(1, 35)
       ->flat_map<int>([](auto val) {
-        return rx::of(val, 3)->delay(10ms)->first()->map([](auto x) {
-          return x * x;
-        });
+        return rx::of(val, 3)->delay(10ms)->first()->map(
+            [](auto x) { return x * x; });
       })
       ->delay(300ms)
       ->sample(500ms)
@@ -366,13 +328,10 @@ int main() {
   std::map<int, std::chrono::milliseconds> times = {
       {0, 100ms}, {1, 600ms}, {2, 400ms}, {3, 700ms}, {4, 200ms}};
   rx::from(times)
-      ->flat_map<int>([](auto p) {
-        return rx::of(p.first)->delay(p.second);
-      }) // 0, 2, 4
+      ->flat_map<int>(
+          [](auto p) { return rx::of(p.first)->delay(p.second); }) // 0, 2, 4
       ->debounce(500ms)
-      ->subscribe([](int i) {
-        DEBUG_VALUE_OF(i);
-      });
+      ->subscribe([](int i) { DEBUG_VALUE_OF(i); });
 
   return 0;
 }
