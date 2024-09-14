@@ -269,7 +269,6 @@ public:
         this->subscribe(
             [predicate, on_next, &ret](const T& value) {
                 if (!predicate(value)) {
-                    //on_next(false);
                     ret = false;
                     throw on_complete();
                 }
@@ -279,7 +278,21 @@ public:
             }
         );
     });
-}
+  }
+
+    auto count() {
+        return make_shared_observable<T>([this] (const observer_t& on_next) {
+            size_t count = 0;
+            this->subscribe(
+                [&count] (const T& t) {
+                    count++;
+                },
+                [on_next, &count] {
+                    on_next(count);
+            });
+        });
+    }
+
 
 
   template <typename U, typename... Ts>
@@ -365,12 +378,12 @@ int main() {
     rx::start(foo)->subscribe([] (int i) { DEBUG_VALUE_OF(i); });
     rx::of(1, 2, 3, 4, 5, 6, 7)
       ->delay(1ms)
-      ->all([] (int value) { return value > 0; })
+      ->count()
       ->subscribe([](int i) { 
             DEBUG_VALUE_OF(i); 
         },
         [] { 
-            std::cout << "done!" << std::endl; 
+            std::cout << "count done!" << std::endl; 
         });
 
   rx::range(1, 10)
