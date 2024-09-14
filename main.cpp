@@ -14,6 +14,7 @@
 #include <ctime>
 #include <iomanip>
 #include <iostream>
+#include <typeinfo>
 
 using namespace std::literals;
 
@@ -21,6 +22,7 @@ using namespace std::literals;
   std::cout << timestamp() << " " << __PRETTY_FUNCTION__ << " @ " << this << std::endl
 #define DEBUG_VALUE_OF(x) std::cout << timestamp() << " " << #x << "=" << x << std::endl
 #define DEBUG_MESSAGE(x) std::cout << timestamp() << " " << x << std::endl
+#define DEBUG_VALUE_AND_TYPE_OF(x) std::cout << timestamp() << " " << #x << "=" << x << " [" << typeid(x).name() << "]" << std::endl
 
 std::string timestamp() {
     // get a precise timestamp as a string
@@ -293,6 +295,15 @@ public:
         });
     }
 
+    template <typename U>
+    auto to(std::function<U(const T&)> mapper) {
+        return make_shared_observable<U>([this, mapper](std::function<void(const U&)> on_next) {
+            this->subscribe([mapper, on_next](const T& value) {
+                on_next(mapper(value));
+            });
+        });
+    }
+
 
 
   template <typename U, typename... Ts>
@@ -379,8 +390,9 @@ int main() {
     rx::of(1, 2, 3, 4, 5, 6, 7)
       ->delay(1ms)
       ->count()
-      ->subscribe([](int i) { 
-            DEBUG_VALUE_OF(i); 
+      ->to<std::string>([] (int value) { return std::to_string(value); })
+      ->subscribe([](const std::string& i) { 
+            DEBUG_VALUE_AND_TYPE_OF(i); 
         },
         [] { 
             std::cout << "count done!" << std::endl; 
