@@ -20,6 +20,7 @@ using namespace std::literals;
 #define DEBUG_METHOD()                                                         \
   std::cout << timestamp() << " " << __PRETTY_FUNCTION__ << " @ " << this << std::endl
 #define DEBUG_VALUE_OF(x) std::cout << timestamp() << " " << #x << "=" << x << std::endl
+#define DEBUG_MESSAGE(x) std::cout << timestamp() << " " << x << std::endl
 
 std::string timestamp() {
     // get a precise timestamp as a string
@@ -261,11 +262,38 @@ public:
         });
   }
 
+  template <typename Predicate>
+    auto all(Predicate predicate) {
+    return make_shared_observable<bool>([this, predicate](const observer_t& on_next) {
+        bool ret = true;
+        this->subscribe(
+            [predicate, on_next, &ret](const T& value) {
+                if (!predicate(value)) {
+                    //on_next(false);
+                    ret = false;
+                    throw on_complete();
+                }
+            },
+            [on_next, &ret]() {
+                on_next(ret);
+            }
+        );
+    });
+}
+
+
   template <typename U, typename... Ts>
   static auto make_shared_observable(Ts &&...ts) {
     return std::make_shared<observable<U>>(std::forward<Ts>(ts)...);
   }
 };
+
+template <typename T>
+static auto defer(std::function<observable<T>()> factory) {
+  return observable<T>::template make_shared_observable<T>([factory](const observer<T>& on_next) {
+        factory().subscribe(on_next);
+    });
+}
 
 template <typename T, typename Period>
 static auto interval(const Period &a_while) {
@@ -316,13 +344,28 @@ template <typename T> static auto range(T start, T count) {
         }
       });
 }
+
+template <typename Fun>
+auto start(Fun&& factory) {
+    using T = typename std::invoke_result<Fun>::type;
+    return observable<T>::template make_shared_observable<T>([factory](const observer<T>& on_next) {
+        on_next(factory());
+    });
+}
+
+
 } // namespace rx
+  //
+
+int foo() { return 42; }
 
 int main() {
   std::atomic<bool> is_done = false;
 
-  rx::of(1, 2, 3, 4, 5, 6, 7)
+    rx::start(foo)->subscribe([] (int i) { DEBUG_VALUE_OF(i); });
+    rx::of(1, 2, 3, 4, 5, 6, 7)
       ->delay(1ms)
+      ->all([] (int value) { return value > 0; })
       ->subscribe([](int i) { 
             DEBUG_VALUE_OF(i); 
         },
@@ -339,10 +382,10 @@ int main() {
       ->sample(500ms)
       ->subscribe(
           [](int value) {
-            std::cout << "Received value: " << value << std::endl;
+            DEBUG_VALUE_OF(value);
           },
           [&is_done] {
-            std::cout << "Sequence complete!" << std::endl;
+            DEBUG_VALUE_OF("Sequence complete!");
             is_done = true;
           });
 
@@ -352,7 +395,7 @@ int main() {
       ->flat_map<int>(
           [](auto p) { return rx::of(p.first)->delay(p.second); }) // 0, 2, 4
       ->debounce(500ms)
-      ->subscribe([](int i) { DEBUG_VALUE_OF(i); });
+      ->subscribe([](auto i) { DEBUG_VALUE_OF(i); });
 
   return 0;
 }
