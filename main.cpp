@@ -131,6 +131,37 @@ public:
     });
   }
 
+  template <typename U>
+    auto scan(U s, std::function<U(U, const T&)> accumulator) {
+    return make_shared_observable<U>([this, s, accumulator](std::function<void(const U&)> on_next) {
+        U seed = s;
+        this->subscribe(
+            [&seed, accumulator, on_next](const T& value) {
+                seed = accumulator(seed, value);
+                on_next(seed);
+            },
+            [seed, on_next]() {
+                on_next(seed);
+            }
+        );
+    });
+    }
+
+    template <typename Duration>
+    auto time_interval()  {
+    return make_shared_observable<Duration>([this](std::function<void(const Duration&)> on_next) {
+        using clock_t = std::chrono::steady_clock;
+        auto lastTime = clock_t::now();
+        this->subscribe(
+            [on_next, &lastTime] (const T& value) {
+                auto currentTime = clock_t::now();
+                on_next(std::chrono::duration_cast<Duration>(currentTime - lastTime));
+                lastTime = currentTime;
+            }
+        );
+    });
+}
+
   template <typename F> auto reduce(F &&fun, T seed = T{0}) {
     return make_shared_observable<T>([this, fun, seed](const observer_t &obs) {
       T result = seed;
@@ -402,6 +433,15 @@ std::ostream &operator <<(std::ostream &os, const std::vector<T> &v) {
     return os;
 }
 
+
+template <typename Rep, typename Period>
+std::ostream& operator<<(std::ostream& os, const std::chrono::duration<Rep, Period>& duration)
+{
+    os << duration.count();
+    return os;
+}
+
+
 int foo() { return 42; }
 
 int main() {
@@ -409,9 +449,11 @@ int main() {
 
     rx::start(foo)->subscribe([] (int i) { DEBUG_VALUE_OF(i); });
     rx::of(1, 2, 3, 4, 5, 6, 7)
-      ->delay(1ms)
+      ->delay(14ms)
+      ->time_interval<std::chrono::milliseconds>()
+      //->scan<int>(0, [] (int a, int b) { return a + b; })
       //->count()
-      ->to_iterable<std::vector<int>>()
+      //->to_iterable<std::vector<int>>()
       //->to<std::string>([] (int value) { return std::to_string(value); })
       ->subscribe([](auto i) { 
             DEBUG_VALUE_AND_TYPE_OF(i); 
@@ -419,7 +461,7 @@ int main() {
         [] { 
             std::cout << "count done!" << std::endl; 
         });
-
+#if  0
   rx::range(1, 10)
       ->flat_map<int>([](auto val) {
         return rx::of(val, 3)->delay(10ms)->first()->map(
@@ -443,6 +485,6 @@ int main() {
           [](auto p) { return rx::of(p.first)->delay(p.second); }) // 0, 2, 4
       ->debounce(500ms)
       ->subscribe([](auto i) { DEBUG_VALUE_OF(i); });
-
+#endif
   return 0;
 }
