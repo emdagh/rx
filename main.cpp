@@ -15,7 +15,7 @@
 #include <iomanip>
 #include <iostream>
 #include <typeinfo>
-
+#include <iterator>
 using namespace std::literals;
 
 #define DEBUG_METHOD()                                                         \
@@ -304,6 +304,22 @@ public:
         });
     }
 
+    template <typename Container>
+    auto to_iterable() {
+        return make_shared_observable<Container>([this] (std::function<void(const Container&)> on_next) {
+            Container res;
+            auto o_first = std::back_inserter(res);
+
+            this->subscribe(
+                [&o_first] (const T& t) {
+                    *o_first++ = t;
+                },
+                [on_next, &res] {
+                    on_next(res);
+                });
+        });
+    }
+
 
 
   template <typename U, typename... Ts>
@@ -380,6 +396,11 @@ auto start(Fun&& factory) {
 
 } // namespace rx
   //
+template<typename T>
+std::ostream &operator <<(std::ostream &os, const std::vector<T> &v) {
+    std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, ","));
+    return os;
+}
 
 int foo() { return 42; }
 
@@ -389,9 +410,10 @@ int main() {
     rx::start(foo)->subscribe([] (int i) { DEBUG_VALUE_OF(i); });
     rx::of(1, 2, 3, 4, 5, 6, 7)
       ->delay(1ms)
-      ->count()
-      ->to<std::string>([] (int value) { return std::to_string(value); })
-      ->subscribe([](const std::string& i) { 
+      //->count()
+      ->to_iterable<std::vector<int>>()
+      //->to<std::string>([] (int value) { return std::to_string(value); })
+      ->subscribe([](auto i) { 
             DEBUG_VALUE_AND_TYPE_OF(i); 
         },
         [] { 
