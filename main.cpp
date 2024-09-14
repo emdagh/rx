@@ -11,12 +11,29 @@
 #include <thread>
 #include <unordered_set>
 #include <vector>
+#include <ctime>
+#include <iomanip>
+#include <iostream>
 
 using namespace std::literals;
 
 #define DEBUG_METHOD()                                                         \
-  std::cout << __PRETTY_FUNCTION__ << " @ " << this << std::endl
-#define DEBUG_VALUE_OF(x) std::cout << #x << "=" << x << std::endl
+  std::cout << timestamp() << " " << __PRETTY_FUNCTION__ << " @ " << this << std::endl
+#define DEBUG_VALUE_OF(x) std::cout << timestamp() << " " << #x << "=" << x << std::endl
+
+std::string timestamp() {
+    // get a precise timestamp as a string
+  const auto now = std::chrono::system_clock::now();
+  const auto nowAsTimeT = std::chrono::system_clock::to_time_t(now);
+  const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+      now.time_since_epoch()) % 1000;
+  std::stringstream ss;
+  ss
+      << std::put_time(std::localtime(&nowAsTimeT), "%a %b %d %Y %T")
+      << '.' << std::setfill('0') << std::setw(3) << nowMs.count();
+  return ss.str();
+}
+
 template <typename F> void call_async(F &&fun) {
   auto futptr = std::make_shared<std::future<
       void>>(); // passing this by value to the lambda will increment the
@@ -305,17 +322,21 @@ int main() {
   std::atomic<bool> is_done = false;
 
   rx::of(1, 2, 3, 4, 5, 6, 7)
-      ->subscribe([](int i) { DEBUG_VALUE_OF(i); },
-                  [] { std::cout << "done!" << std::endl; });
+      ->delay(1ms)
+      ->subscribe([](int i) { 
+            DEBUG_VALUE_OF(i); 
+        },
+        [] { 
+            std::cout << "done!" << std::endl; 
+        });
 
-  rx::range(1, 35)
+  rx::range(1, 10)
       ->flat_map<int>([](auto val) {
         return rx::of(val, 3)->delay(10ms)->first()->map(
             [](auto x) { return x * x; });
       })
       ->delay(300ms)
       ->sample(500ms)
-      //->debounce(500ms)
       ->subscribe(
           [](int value) {
             std::cout << "Received value: " << value << std::endl;
