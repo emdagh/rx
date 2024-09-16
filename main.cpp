@@ -314,14 +314,14 @@ public:
 #endif
   }
 
-  template <typename U, typename Predicate>
-  auto if_then_else(Predicate predicate,
+  template <typename U>
+  auto if_then_else(std::function<bool(const T &)> predicate,
                     const std::shared_ptr<observable<U>> &thenObservable,
                     const std::shared_ptr<observable<U>> &elseObservable) {
     return make_shared_observable<U>(
         [this, predicate, thenObservable, elseObservable](observer<U> on_next) {
           this->subscribe([predicate, thenObservable, elseObservable,
-                           on_next](const U &value) {
+                           on_next](const T &value) {
             if (predicate(value)) {
               thenObservable->subscribe(on_next);
             } else {
@@ -499,12 +499,13 @@ int main() {
   std::atomic<bool> is_done = false;
 
   rx::of(1, 2, 3, 4, 5, 6, 7)
-      ->delay(14ms)
-      ->if_then_else([](auto val) { return val > 4; }, rx::of(1), rx::of(2))
-      //->time_interval<std::chrono::milliseconds>()
+      ->delay(10ms)
+      ->if_then_else([](auto val) { return val > 4; }, rx::of("a")->delay(13ms),
+                     rx::of("b")->delay(37ms))
+      ->time_interval<std::chrono::milliseconds>()
       //->scan<int>(0, [] (int a, int b) { return a + b; })
       //->count()
-      ->to_iterable<std::vector<int>>()
+      //->to_iterable<std::vector<int>>()
       //->to<std::string>([] (auto value) { return std::to_string(value); })
       ->subscribe([](auto i) { DEBUG_VALUE_AND_TYPE_OF(i); },
                   [] { std::cout << "count done!" << std::endl; });
