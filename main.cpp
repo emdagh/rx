@@ -273,10 +273,6 @@ public:
       size_t count = 0;
       bool has_completed = false;
       this->subscribe([this, &count, obs, n, &has_completed](const T &value) {
-        // flush
-        // if (has_completed) {
-        // obs(value);
-        //}
         if (count++ < n) {
           obs(value);
         } else {
@@ -630,9 +626,11 @@ int main() {
 
   std::map<int, std::chrono::milliseconds> times = {
       {0, 100ms}, {1, 600ms}, {2, 400ms}, {3, 700ms}, {4, 200ms}};
+
   rx::from(times)
-      ->flat_map<int>(
-          [](auto p) { return rx::of(p.first)->delay(p.second); }) // 0, 2, 4
+      ->flat_map<int>([](const auto &p) {
+        return rx::of(p.first)->delay(p.second);
+      }) // 0, 2, 4
       ->debounce(500ms)
       ->subscribe([](auto i) { DEBUG_VALUE_OF(i); });
 #endif
