@@ -1,3 +1,4 @@
+#include "refcount_ptr.hpp"
 #include <atomic>
 #include <chrono>
 #include <ctime>
@@ -79,6 +80,7 @@ std::ostream &operator<<(std::ostream &os,
 }
 
 namespace rx {
+
 struct on_complete : public std::exception {};
 
 template <typename T>
@@ -163,7 +165,6 @@ public:
         auto current_time = clock_t::now();
         if (current_time - last_time < timeout) {
           obs(value);
-          // is_first = false;
         }
         last_time = current_time;
       });
@@ -284,10 +285,10 @@ public:
   }
 
   template <typename U>
-  using Mapper = std::function<std::shared_ptr<observable<U>>(const T &)>;
+  using Mapper = std::function<refcount_ptr<observable<U>>(const T &)>;
 
   template <typename U>
-  auto flat_map(Mapper<U> &&mapper) {
+  auto flat_map(Mapper<U> mapper) {
     return make_shared_observable<U>([this, mapper](observer<U> next) {
       this->subscribe([mapper, next](const T &value) {
         return mapper(value)->subscribe(next);
@@ -372,8 +373,8 @@ public:
 
   template <typename U>
   auto if_then_else(std::function<bool(const T &)> predicate,
-                    const std::shared_ptr<observable<U>> &then_,
-                    const std::shared_ptr<observable<U>> &else_) {
+                    const refcount_ptr<observable<U>> &then_,
+                    const refcount_ptr<observable<U>> &else_) {
     return make_shared_observable<U>(
         [this, predicate, then_, else_](observer<U> on_next) {
           this->subscribe([predicate, then_, else_, on_next](const T &value) {
@@ -464,7 +465,7 @@ public:
 
   template <typename U, typename... Ts>
   static auto make_shared_observable(Ts &&...ts) {
-    return std::make_shared<observable<U>>(std::forward<Ts>(ts)...);
+    return make_refcount_ptr<observable<U>>(std::forward<Ts>(ts)...);
   }
 };
 
@@ -575,11 +576,11 @@ int main() {
       {0, 100ms}, {1, 600ms}, {2, 400ms}, {3, 700ms}, {4, 200ms}};
 
   rx::from(times)
-      ->flat_map<int>([](const auto &p) {
-        return rx::of(p.first)->delay(p.second);
+      ->flat_map<int>([](const auto &time) {
+        return rx::of(time.first)->delay(time.second);
       }) // 0, 2, 4
       ->debounce(500ms)
-      ->subscribe([](auto i) { DEBUG_VALUE_OF(i); });
+      ->subscribe([](auto value) { DEBUG_VALUE_OF(value); });
 #endif
   return 0;
 }
