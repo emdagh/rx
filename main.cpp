@@ -309,31 +309,11 @@ public:
 
   template <typename U>
   auto flat_map(Mapper<U> &&mapper) {
-#if 0
-    return make_shared_observable<U>(
-        [this, mapper](std::function<void(const U &)> on_next) {
-          std::stack<std::shared_ptr<observable<U>>> innerObservables;
-          std::stack<observer<U>> innerObservers;
-
-          this->subscribe([mapper, &innerObservables, &innerObservers,
-                           on_next](const T &value) {
-            innerObservables.push(mapper(value));
-            innerObservers.push(on_next);
-
-            while (!innerObservables.empty()) {
-              innerObservables.top()->subscribe(innerObservers.top());
-              innerObservables.pop();
-              innerObservers.pop();
-            }
-          });
-        });
-#else
     return make_shared_observable<U>([this, mapper](observer<U> next) {
       this->subscribe([mapper, next](const T &value) {
         return mapper(value)->subscribe(next);
       });
     });
-#endif
   }
 
   template <typename Period>
