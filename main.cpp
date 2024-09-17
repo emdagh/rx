@@ -9,12 +9,14 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <optional>
 #include <queue>
 #include <stack>
 #include <thread>
 #include <typeinfo>
 #include <unordered_set>
 #include <vector>
+
 using namespace std::literals;
 
 #define DEBUG_METHOD()                                                         \
@@ -67,6 +69,16 @@ struct lambda_equal {
   }
 };
 
+template <typename T>
+std::ostream &operator<<(std::ostream &os, const std::optional<T> &v) {
+  // std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, ","));
+  if (v.has_value()) {
+    os << v.value();
+  } else {
+    os << "null";
+  }
+  return os;
+}
 template <typename T, typename U>
 std::ostream &operator<<(std::ostream &os, const std::pair<T, U> &v) {
   // std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, ","));
@@ -104,6 +116,7 @@ public:
   using subscribe_callback = std::function<void(const observer_t &)>;
 
 private:
+  bool _is_completed = false;
   subscribe_callback _subscribe_callback;
 
   std::vector<completer_t> _completers;
@@ -112,6 +125,7 @@ private:
     try {
       _subscribe_callback(obj);
     } catch (on_complete &oc) {
+      this->_is_completed = true;
       return;
     }
   }
@@ -127,6 +141,8 @@ public:
   virtual ~observable() {
     // DEBUG_METHOD();
   }
+
+  bool is_completed() const { return _is_completed; }
 
   template <typename... Ts>
   void subscribe(Ts &&...ts) {
@@ -149,11 +165,10 @@ public:
 
   template <typename Period>
   auto delay(const Period &a_while) {
+
     return make_shared_observable<T>([=](const observer_t &obs) {
-      this->subscribe([=](const T &t) {
-        std::this_thread::sleep_for(a_while);
-        obs(t);
-      });
+      std::this_thread::sleep_for(a_while);
+      this->subscribe([=](const T &t) { obs(t); });
     });
   }
 
@@ -256,10 +271,16 @@ public:
   auto take(size_t n) {
     return make_shared_observable<T>([this, n](const observer_t &obs) {
       size_t count = 0;
-      this->subscribe([this, &count, obs, n](const T &value) {
+      bool has_completed = false;
+      this->subscribe([this, &count, obs, n, &has_completed](const T &value) {
+        // flush
+        // if (has_completed) {
+        // obs(value);
+        //}
         if (count++ < n) {
           obs(value);
         } else {
+          has_completed = true;
           throw on_complete();
         }
       });
@@ -318,10 +339,66 @@ public:
     });
 #endif
   }
+
+  template <typename Period>
+  auto buffer_with_time(const Period &period) {
+    using U = std::vector<T>;
+    using clock_t = std::chrono::steady_clock;
+
+    return make_shared_observable<U>([this, period](observer<U> on_next) {
+      U buffer = {};
+
+      auto when = clock_t::now() + period;
+
+      this->subscribe(
+          [&buffer, &when, period, on_next](const T &val) {
+            buffer.push_back(val);
+            auto now = clock_t::now();
+            if (now < when) {
+            } else {
+              on_next(buffer);
+              buffer.clear();
+              when = now + period;
+            }
+          },
+          [on_next, &buffer] {
+            // clear out any remainders
+            if (buffer.size() > 0) {
+              on_next(buffer);
+              buffer.clear();
+            }
+          });
+    });
+  }
+
+  auto buffer_with_count(size_t n) {
+    using U = std::vector<T>;
+
+    return make_shared_observable<U>([this, n](observer<U> on_next) {
+      U buffer = {};
+
+      this->subscribe(
+          [&buffer, n, on_next](const T &val) {
+            buffer.push_back(val);
+            if (buffer.size() >= n) {
+              on_next(buffer);
+              buffer.clear();
+            }
+          },
+          [on_next, &buffer] {
+            // clear out any remainders
+            if (buffer.size() > 0) {
+              on_next(buffer);
+              buffer.clear();
+            }
+          });
+    });
+  }
+
   template <typename KeySelector> //, typename ValueSelector>
   auto group_by(KeySelector key_for) {
     using U = std::vector<T>;
-    using Y = std::pair<T, U>;
+    using Y = std::optional<std::pair<T, U>>;
     return make_shared_observable<Y>([this, key_for](observer<Y> on_next) {
       std::unordered_map<T, U> buffer = {};
 
@@ -330,6 +407,7 @@ public:
             // if (key_for(value))
             auto key = key_for(value);
             buffer[key].push_back(value);
+            // on_next(std::nullopt);
           },
           [on_next, &buffer] {
             for (auto group : buffer) {
@@ -531,17 +609,11 @@ std::string lexical_cast(const T &t) {
 int main() {
   std::atomic<bool> is_done = false;
 
-  rx::of(1, 2, 3, 4, 5, 6, 7)
-      ->delay(10ms)
+  rx::interval<int>(50ms)
+      ->take(15)
       ->group_by([](auto key) { return key & 1; })
-      //->time_interval<std::chrono::milliseconds>()
-      //->scan(0, [](auto a, auto b) { return a + b; })
-      //->count()
-      //->to_iterable<std::vector<int>>()
-      //->to<std::string>([](auto value) { return lexical_cast(value); })
       ->subscribe([](auto i) { DEBUG_VALUE_AND_TYPE_OF(i); },
                   [] { std::cout << "count done!" << std::endl; });
-  exit(1);
 #if 1
   rx::range(1, 10)
       ->flat_map<int>([](auto val) {
