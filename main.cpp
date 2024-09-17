@@ -413,16 +413,15 @@ public:
 
   template <typename U>
   auto if_then_else(std::function<bool(const T &)> predicate,
-                    const std::shared_ptr<observable<U>> &thenObservable,
-                    const std::shared_ptr<observable<U>> &elseObservable) {
+                    const std::shared_ptr<observable<U>> &then_,
+                    const std::shared_ptr<observable<U>> &else_) {
     return make_shared_observable<U>(
-        [this, predicate, thenObservable, elseObservable](observer<U> on_next) {
-          this->subscribe([predicate, thenObservable, elseObservable,
-                           on_next](const T &value) {
+        [this, predicate, then_, else_](observer<U> on_next) {
+          this->subscribe([predicate, then_, else_, on_next](const T &value) {
             if (predicate(value)) {
-              thenObservable->subscribe(on_next);
+              then_->subscribe(on_next);
             } else {
-              elseObservable->subscribe(on_next);
+              else_->subscribe(on_next);
             }
           });
         });
