@@ -50,28 +50,8 @@ void call_async(F &&fun) {
   *futptr = std::async(std::launch::async, [futptr, fun]() { fun(); });
 }
 
-struct lambda_hash {
-  template <typename Fun>
-  std::size_t operator()(Fun &&lambda) const {
-    // Implement a suitable hash function for the lambda
-    // For example, you could hash the lambda's address or a representative
-    // value
-    return std::hash<const void *>()(&lambda);
-  }
-};
-struct lambda_equal {
-  template <typename Fun>
-  bool operator()(Fun &&lhs, Fun &&rhs) const {
-    // Implement a suitable equality comparison for the lambda
-    // For example, you could compare the lambda's address or a representative
-    // value
-    return &lhs == &rhs;
-  }
-};
-
 template <typename T>
 std::ostream &operator<<(std::ostream &os, const std::optional<T> &v) {
-  // std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, ","));
   if (v.has_value()) {
     os << v.value();
   } else {
@@ -81,7 +61,6 @@ std::ostream &operator<<(std::ostream &os, const std::optional<T> &v) {
 }
 template <typename T, typename U>
 std::ostream &operator<<(std::ostream &os, const std::pair<T, U> &v) {
-  // std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, ","));
   os << v.first << "=" << v.second;
   return os;
 }
