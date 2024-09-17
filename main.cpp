@@ -400,10 +400,8 @@ public:
 
       this->subscribe(
           [on_next, &buffer, key_for](const T &value) {
-            // if (key_for(value))
             auto key = key_for(value);
             buffer[key].push_back(value);
-            // on_next(std::nullopt);
           },
           [on_next, &buffer] {
             for (auto group : buffer) {
@@ -411,15 +409,6 @@ public:
             }
           });
     });
-    /*auto sub = [this, key_for](observer<U> on_next) {
-      this->subscribe(
-            // for (auto b : buffer)
-            //  for (auto i : b.second)
-            //    on_next(i);
-          });
-    };
-    return make_shared_observable<U>(
-        [this, sub](const observer<U> &on_next) { sub(on_next); });*/
   }
 
   template <typename U>
