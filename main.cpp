@@ -24,11 +24,11 @@ using namespace std::literals;
   std::cout << timestamp() << " " << __PRETTY_FUNCTION__ << " @ " << this      \
             << std::endl
 #define DEBUG_VALUE_OF(x)                                                      \
-  std::cout << timestamp() << " " << #x << "=" << x << std::endl
-#define DEBUG_MESSAGE(x) std::cout << timestamp() << " " << x << std::endl
+  std::cout << timestamp() << " " << #x << "=" << (((x))) << std::endl
+#define DEBUG_MESSAGE(x) std::cout << timestamp() << " " << (((x))) << std::endl
 #define DEBUG_VALUE_AND_TYPE_OF(x)                                             \
-  std::cout << timestamp() << " " << #x << "=" << x << " ["                    \
-            << typeid(x).name() << "]" << std::endl
+  std::cout << timestamp() << " " << #x << "=" << (((x))) << " ["              \
+            << typeid((((x)))).name() << "]" << std::endl
 
 std::string timestamp() {
   // get a precise timestamp as a string
@@ -37,10 +37,10 @@ std::string timestamp() {
   const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                          now.time_since_epoch()) %
                      1000;
-  std::stringstream ss;
-  ss << std::put_time(std::localtime(&nowAsTimeT), "%a %b %d %Y %T") << '.'
-     << std::setfill('0') << std::setw(3) << nowMs.count();
-  return ss.str();
+  std::stringstream sss;
+  sss << std::put_time(std::localtime(&nowAsTimeT), "%a %b %d %Y %T") << '.'
+      << std::setfill('0') << std::setw(3) << nowMs.count();
+  return sss.str();
 }
 
 template <typename F>
@@ -51,15 +51,6 @@ void call_async(F &&fun) {
   *futptr = std::async(std::launch::async, [futptr, fun]() { fun(); });
 }
 
-template <typename T>
-std::ostream &operator<<(std::ostream &os, const std::optional<T> &v) {
-  if (v.has_value()) {
-    os << v.value();
-  } else {
-    os << "null";
-  }
-  return os;
-}
 template <typename T, typename U>
 std::ostream &operator<<(std::ostream &os, const std::pair<T, U> &v) {
   os << v.first << "=" << v.second;
@@ -76,6 +67,15 @@ template <typename Rep, typename Period>
 std::ostream &operator<<(std::ostream &os,
                          const std::chrono::duration<Rep, Period> &duration) {
   os << duration.count();
+  return os;
+}
+template <typename T>
+std::ostream &operator<<(std::ostream &os, const std::optional<T> &v) {
+  if (v.has_value()) {
+    os << v.value();
+  } else {
+    os << "null";
+  }
   return os;
 }
 
@@ -129,7 +129,7 @@ public:
   void subscribe(Ts &&...ts) {
     (subscribe_impl(std::forward<Ts>(ts)), ...);
 
-    for (auto complete : _completers) {
+    for (const auto &complete : _completers) {
       complete();
     }
   }
@@ -343,7 +343,7 @@ public:
           },
           [on_next, &buffer] {
             // clear out any remainders
-            if (buffer.size() > 0) {
+            if (!buffer.empty()) {
               on_next(buffer);
               buffer.clear();
             }
@@ -464,8 +464,8 @@ public:
   }
 
   template <typename U, typename... Ts>
-  static auto make_shared_observable(Ts &&...ts) {
-    return make_refcount_ptr<observable<U>>(std::forward<Ts>(ts)...);
+  static auto make_shared_observable(Ts &&...args) {
+    return make_refcount_ptr<observable<U>>(std::forward<Ts>(args)...);
   }
 };
 
@@ -545,9 +545,9 @@ int foo() { return 42; }
 
 template <typename T>
 std::string lexical_cast(const T &t) {
-  std::stringstream ss;
-  ss << t;
-  return ss.str();
+  std::stringstream sss;
+  sss << t;
+  return sss.str();
 }
 
 int main() {
@@ -556,16 +556,15 @@ int main() {
   rx::interval<int>(50ms)
       ->take(15)
       ->group_by([](auto key) { return key & 1; })
-      ->subscribe([](auto i) { DEBUG_VALUE_AND_TYPE_OF(i); },
-                  [] { std::cout << "count done!" << std::endl; });
+      ->subscribe(
+          [](auto value) constexpr { DEBUG_VALUE_AND_TYPE_OF(value); },
+          []() constexpr { std::cout << "count done!" << std::endl; });
 #if 1
   rx::range(1, 10)
       ->flat_map<int>([](auto val) {
         return rx::of(val, 3)->delay(10ms)->first()->map(
-            [](auto x) { return x * x; });
+            [](auto value) { return value * value; });
       })
-      ->delay(300ms)
-      ->sample(500ms)
       ->subscribe([](int value) { DEBUG_VALUE_OF(value); },
                   [&is_done] {
                     DEBUG_VALUE_OF("Sequence complete!");
