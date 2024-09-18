@@ -19,6 +19,29 @@
 #include <typeinfo>
 #include <unordered_set>
 #include <vector>
+
+#define DEBUG_METHOD()                                                         \
+    std::cout << timestamp() << " " << __PRETTY_FUNCTION__ << " @ " << this    \
+              << std::endl
+#define DEBUG_VALUE_OF(x)                                                      \
+    std::cout << timestamp() << " " << #x << "=" << (((x))) << std::endl
+#define DEBUG_MESSAGE(x) std::cout << timestamp() << " " << (((x))) << std::endl
+#define DEBUG_VALUE_AND_TYPE_OF(x)                                             \
+    std::cout << timestamp() << " " << #x << "=" << (((x))) << " ["            \
+              << typeid((((x)))).name() << "]" << std::endl
+
+std::string timestamp() {
+    // get a precise timestamp as a string
+    const auto now = std::chrono::system_clock::now();
+    const auto nowAsTimeT = std::chrono::system_clock::to_time_t(now);
+    const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           now.time_since_epoch()) %
+                       1000;
+    std::stringstream sss;
+    sss << std::put_time(std::localtime(&nowAsTimeT), "%a %b %d %Y %T") << '.'
+        << std::setfill('0') << std::setw(3) << nowMs.count();
+    return sss.str();
+}
 namespace rx {
 
 struct on_complete : public std::exception {};
@@ -417,8 +440,9 @@ class observable {
 // helper
 template <typename T, typename... Args>
 static auto make_shared_observable(Args &&...args) {
-    return observable<T>::template make_shared_observable<T>(
-        std::forward<Args>(args)...);
+    return make_refcount_ptr<observable<T>>(std::forward<Args>(args)...);
+    // return observable<T>::template make_shared_observable<T>(
+    //     std::forward<Args>(args)...);
 }
 
 template <typename T>

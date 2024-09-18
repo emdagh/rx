@@ -21,29 +21,6 @@
 
 using namespace std::literals;
 
-#define DEBUG_METHOD()                                                         \
-    std::cout << timestamp() << " " << __PRETTY_FUNCTION__ << " @ " << this    \
-              << std::endl
-#define DEBUG_VALUE_OF(x)                                                      \
-    std::cout << timestamp() << " " << #x << "=" << (((x))) << std::endl
-#define DEBUG_MESSAGE(x) std::cout << timestamp() << " " << (((x))) << std::endl
-#define DEBUG_VALUE_AND_TYPE_OF(x)                                             \
-    std::cout << timestamp() << " " << #x << "=" << (((x))) << " ["            \
-              << typeid((((x)))).name() << "]" << std::endl
-
-std::string timestamp() {
-    // get a precise timestamp as a string
-    const auto now = std::chrono::system_clock::now();
-    const auto nowAsTimeT = std::chrono::system_clock::to_time_t(now);
-    const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           now.time_since_epoch()) %
-                       1000;
-    std::stringstream sss;
-    sss << std::put_time(std::localtime(&nowAsTimeT), "%a %b %d %Y %T") << '.'
-        << std::setfill('0') << std::setw(3) << nowMs.count();
-    return sss.str();
-}
-
 template <typename F>
 void call_async(F &&fun) {
     auto futptr = std::make_shared<std::future<
@@ -110,6 +87,8 @@ auto tcp(uint16_t port) {
     return rx::make_shared_observable<std::string>(
         [port](const rx::observer<std::string> &on_next) {
             int sock = socket(AF_INET, SOCK_STREAM, 0);
+            int option = 1;
+            setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
             sockaddr_in addr = {0};
             addr.sin_family = AF_INET;
             addr.sin_addr.s_addr = INADDR_ANY;
@@ -141,7 +120,7 @@ auto tcp(uint16_t port) {
 
 int main() {
 
-    tcp(5557)->take(2)->subscribe(
+    tcp(5557)->take(1)->subscribe(
         [](const std::string &str) { DEBUG_VALUE_OF(str); });
 
     rx::interval<int>(50ms)
