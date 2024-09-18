@@ -94,16 +94,16 @@ std::string lexical_cast(const T &t) {
 #include <sys/socket.h>
 #include <unistd.h>
 
-struct tcp_client {
+struct tcp_listener {
     int _fd;
     int _self;
-    tcp_client(int fd) : _fd(fd) {
+    tcp_listener(int fd) : _fd(fd) {
         _self = accept(_fd, nullptr, nullptr);
         if (_self < 0)
             perror("accept");
     }
 
-    ~tcp_client() { close(_self); }
+    ~tcp_listener() { close(_self); }
 };
 
 auto tcp(uint16_t port) {
@@ -120,7 +120,7 @@ auto tcp(uint16_t port) {
 
             while (true) {
                 // int client = accept(sock, nullptr, nullptr);
-                tcp_client client(sock);
+                tcp_listener client(sock);
 
                 std::string data;
                 while (true) {
