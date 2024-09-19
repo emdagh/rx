@@ -29,34 +29,6 @@ void call_async(F &&fun) {
     *futptr = std::async(std::launch::async, [futptr, fun]() { fun(); });
 }
 
-template <typename T, typename U>
-std::ostream &operator<<(std::ostream &os, const std::pair<T, U> &v) {
-    os << v.first << "=" << v.second;
-    return os;
-}
-
-template <typename T>
-std::ostream &operator<<(std::ostream &os, const std::vector<T> &v) {
-    std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, ","));
-    return os;
-}
-
-template <typename Rep, typename Period>
-std::ostream &operator<<(std::ostream &os,
-                         const std::chrono::duration<Rep, Period> &duration) {
-    os << duration.count();
-    return os;
-}
-template <typename T>
-std::ostream &operator<<(std::ostream &os, const std::optional<T> &v) {
-    if (v.has_value()) {
-        os << v.value();
-    } else {
-        os << "null";
-    }
-    return os;
-}
-
 int foo() { return 42; }
 
 template <typename T>
@@ -71,19 +43,19 @@ std::string lexical_cast(const T &t) {
 #include <sys/socket.h>
 #include <unistd.h>
 
-struct tcp_listener {
+struct tcp_accept {
     int _fd;
     int _self;
-    tcp_listener(int fd) : _fd(fd) {
+    tcp_accept(int fd) : _fd(fd) {
         _self = accept(_fd, nullptr, nullptr);
         if (_self < 0)
             perror("accept");
     }
 
-    ~tcp_listener() { close(_self); }
+    ~tcp_accept() { close(_self); }
 };
 
-auto tcp(uint16_t port) {
+auto tcp_listener(uint16_t port) {
     return rx::make_shared_observable<std::string>(
         [port](const rx::observer<std::string> &on_next) {
             int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -96,11 +68,8 @@ auto tcp(uint16_t port) {
             if (bind(sock, (sockaddr *)&addr, sizeof(addr)) < 0)
                 perror("accept");
             listen(sock, 5);
-
             while (true) {
-                // int client = accept(sock, nullptr, nullptr);
-                tcp_listener client(sock);
-
+                tcp_accept client(sock);
                 std::string data;
                 while (true) {
                     char buf[1024];
@@ -111,7 +80,6 @@ auto tcp(uint16_t port) {
                     }
                     on_next(std::string(buf, len));
                 }
-                // close(client);
             }
             throw rx::on_complete();
             close(sock);
@@ -120,15 +88,21 @@ auto tcp(uint16_t port) {
 
 int main() {
 
-    tcp(5557)->take(1)->subscribe(
-        [](const std::string &str) { DEBUG_VALUE_OF(str); });
+    // tcp_listener(5557)->take(1)->subscribe(
+    //     [](const std::string &str) { DEBUG_VALUE_OF(str); });
+
+    rx::of(1, 2, 3, 4, 5, 6)
+        ->flat_map<int>([](auto i) { return rx::of(i)->delay(10ms); })
+        ->window(30ms)
+        ->subscribe([](auto next) {
+            next->subscribe([](auto value) { DEBUG_VALUE_AND_TYPE_OF(value); });
+        });
 
     rx::interval<int>(50ms)
         ->take(10) // 500ms
         ->group_by([](auto key) { return key & 1; })
-        ->subscribe(
-            [](auto value) constexpr { DEBUG_VALUE_AND_TYPE_OF(value); },
-            []() constexpr { std::cout << "count done!" << std::endl; });
+        ->subscribe([](auto value) { DEBUG_VALUE_AND_TYPE_OF(value); },
+                    []() { std::cout << "count done!" << std::endl; });
     rx::range(1, 10)
         ->flat_map<int>([](auto val) {
             return rx::of(val, 3)->delay(10ms)->first()->map(

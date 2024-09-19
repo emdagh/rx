@@ -29,6 +29,33 @@
 #define DEBUG_VALUE_AND_TYPE_OF(x)                                             \
     std::cout << timestamp() << " " << #x << "=" << (((x))) << " ["            \
               << typeid((((x)))).name() << "]" << std::endl
+template <typename T, typename U>
+std::ostream &operator<<(std::ostream &os, const std::pair<T, U> &v) {
+    os << v.first << "=" << v.second;
+    return os;
+}
+
+template <typename T>
+std::ostream &operator<<(std::ostream &os, const std::vector<T> &v) {
+    std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, ","));
+    return os;
+}
+
+template <typename Rep, typename Period>
+std::ostream &operator<<(std::ostream &os,
+                         const std::chrono::duration<Rep, Period> &duration) {
+    os << duration.count();
+    return os;
+}
+template <typename T>
+std::ostream &operator<<(std::ostream &os, const std::optional<T> &v) {
+    if (v.has_value()) {
+        os << v.value();
+    } else {
+        os << "null";
+    }
+    return os;
+}
 
 std::string timestamp() {
     // get a precise timestamp as a string
@@ -43,6 +70,9 @@ std::string timestamp() {
     return sss.str();
 }
 namespace rx {
+
+template <typename Iterable>
+auto from(Iterable iterable);
 
 struct on_complete : public std::exception {};
 
@@ -276,8 +306,7 @@ class observable {
                 [&buffer, &when, period, on_next](const T &val) {
                     buffer.push_back(val);
                     auto now = clock_t::now();
-                    if (now < when) {
-                    } else {
+                    if (now >= when) {
                         on_next(buffer);
                         buffer.clear();
                         when = now + period;
@@ -311,6 +340,36 @@ class observable {
                     // clear out any remainders
                     if (!buffer.empty()) {
                         on_next(buffer);
+                        buffer.clear();
+                    }
+                });
+        });
+    }
+
+    template <typename Duration>
+    auto window(const Duration &duration) {
+        using U = refcount_ptr<observable<T>>; // std::vector<T>;
+        using clock_t = std::chrono::steady_clock;
+
+        return make_shared_observable<U>([this, duration](observer<U> on_next) {
+            std::vector<T> buffer = {};
+
+            auto when = clock_t::now() + duration;
+
+            this->subscribe(
+                [&buffer, &when, duration, on_next](const T &val) {
+                    buffer.push_back(val);
+                    auto now = clock_t::now();
+                    if (now >= when) {
+                        on_next(rx::from(buffer));
+                        buffer.clear();
+                        when = now + duration;
+                    }
+                },
+                [on_next, &buffer] {
+                    // clear out any remainders
+                    if (buffer.size() > 0) {
+                        on_next(rx::from(buffer));
                         buffer.clear();
                     }
                 });
