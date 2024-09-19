@@ -379,7 +379,8 @@ class observable {
     template <typename KeySelector> //, typename ValueSelector>
     auto group_by(KeySelector key_for) {
         using U = std::vector<T>;
-        using Y = std::optional<std::pair<T, U>>;
+        using Y = refcount_ptr<observable<T>>; // std::optional<std::pair<T,
+                                               // U>>;
         return make_shared_observable<Y>([this, key_for](observer<Y> on_next) {
             std::unordered_map<T, U> buffer = {};
 
@@ -390,7 +391,7 @@ class observable {
                 },
                 [on_next, &buffer] {
                     for (auto group : buffer) {
-                        on_next(group);
+                        on_next(rx::from(group.second));
                     }
                 });
         });

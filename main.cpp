@@ -94,15 +94,23 @@ int main() {
     rx::of(1, 2, 3, 4, 5, 6)
         ->flat_map<int>([](auto i) { return rx::of(i)->delay(10ms); })
         ->window(30ms)
-        ->subscribe([](auto next) {
-            next->subscribe([](auto value) { DEBUG_VALUE_AND_TYPE_OF(value); });
-        });
+        ->subscribe(
+            [](auto next) {
+                next->subscribe(
+                    [](auto value) { DEBUG_VALUE_AND_TYPE_OF(value); });
+            },
+            [] { DEBUG_MESSAGE("windowing done"); });
 
     rx::interval<int>(50ms)
         ->take(10) // 500ms
         ->group_by([](auto key) { return key & 1; })
-        ->subscribe([](auto value) { DEBUG_VALUE_AND_TYPE_OF(value); },
-                    []() { std::cout << "count done!" << std::endl; });
+        ->subscribe(
+            [](auto obs) {
+                DEBUG_MESSAGE("new group");
+                obs->subscribe(
+                    [](auto value) { DEBUG_VALUE_AND_TYPE_OF(value); });
+            },
+            []() { std::cout << "count done!" << std::endl; });
     rx::range(1, 10)
         ->flat_map<int>([](auto val) {
             return rx::of(val, 3)->delay(10ms)->first()->map(
