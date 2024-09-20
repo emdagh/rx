@@ -108,11 +108,18 @@ class observable {
         : _subscribe_callback(fun) {}
 
     observable(const observable &other)
-        : _subscribe_callback(other._subscribe_callback) {}
-    observable operator=(const observable &) const = delete;
+        : _subscribe_callback(other._subscribe_callback)
+        , _completers(other._completers)
+        , _is_completed(other._is_completed) {}
 
     virtual ~observable() {
         // DEBUG_METHOD();
+    }
+
+    observable &operator=(const observable &other) const {
+        observable copy(other);
+        std::swap(copy, *this);
+        return *this;
     }
 
     bool is_completed() const { return _is_completed; }

@@ -96,7 +96,7 @@ int main() {
 
     std::ifstream ifs;
     ifs.open("test.txt");
-    rx::from_istream(ifs)->subscribe([](auto c) {
+    rx::from_istream<char>(ifs)->to_iterable<std::string>()->subscribe([](auto c) {
         DEBUG_VALUE_AND_TYPE_OF(c);
     });
     DEBUG_MESSAGE("-----------------------------");
@@ -107,19 +107,27 @@ int main() {
         })
         ->window(250ms)
         ->subscribe(
-            [](const rx::shared_observable<int> &next) {
+            [](const rx::shared_observable<int> &win) {
                 DEBUG_MESSAGE("new window");
 #if 1
                 std::vector<int> vec = {};
-                next->subscribe([&vec](auto window_value) {
-                    vec.push_back(window_value);
+                auto o_first = std::back_inserter(vec);
+                win->subscribe([&o_first](auto value) {
+                    // vec.push_back(window_value);
+                    *o_first++ = value;
                 });
                 DEBUG_VALUE_AND_TYPE_OF(vec);
 #else
-                // this causes a SIGSEGV somehow..
-                next->to_iterable<std::vector<int>>()->subscribe([](auto window_value) {
-                    DEBUG_VALUE_AND_TYPE_OF(window_value);
-                });
+                win->to_iterable<std::vector<int>>()->subscribe(
+                    [](auto value) {
+                        DEBUG_VALUE_AND_TYPE_OF(value);
+                    },
+                    [] {
+                    });
+        // this causes a SIGSEGV somehow..
+        // next->to_iterable<std::vector<int>>()->subscribe([](auto window_value) {
+        //    DEBUG_VALUE_AND_TYPE_OF(window_value);
+        //});
 #endif
             },
             [] {
