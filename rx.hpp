@@ -20,15 +20,11 @@
 #include <unordered_set>
 #include <vector>
 
-#define DEBUG_METHOD()                                                         \
-    std::cout << timestamp() << " " << __PRETTY_FUNCTION__ << " @ " << this    \
-              << std::endl
-#define DEBUG_VALUE_OF(x)                                                      \
-    std::cout << timestamp() << " " << #x << "=" << (((x))) << std::endl
+#define DEBUG_METHOD() std::cout << timestamp() << " " << __PRETTY_FUNCTION__ << " @ " << this << std::endl
+#define DEBUG_VALUE_OF(x) std::cout << timestamp() << " " << #x << "=" << (((x))) << std::endl
 #define DEBUG_MESSAGE(x) std::cout << timestamp() << " " << (((x))) << std::endl
-#define DEBUG_VALUE_AND_TYPE_OF(x)                                             \
-    std::cout << timestamp() << " " << #x << "=" << (((x))) << " ["            \
-              << typeid((((x)))).name() << "]" << std::endl
+#define DEBUG_VALUE_AND_TYPE_OF(x)                                                                                     \
+    std::cout << timestamp() << " " << #x << "=" << (((x))) << " [" << typeid((((x)))).name() << "]" << std::endl
 template <typename T, typename U>
 std::ostream &operator<<(std::ostream &os, const std::pair<T, U> &v) {
     os << v.first << "=" << v.second;
@@ -42,8 +38,7 @@ std::ostream &operator<<(std::ostream &os, const std::vector<T> &v) {
 }
 
 template <typename Rep, typename Period>
-std::ostream &operator<<(std::ostream &os,
-                         const std::chrono::duration<Rep, Period> &duration) {
+std::ostream &operator<<(std::ostream &os, const std::chrono::duration<Rep, Period> &duration) {
     os << duration.count();
     return os;
 }
@@ -61,12 +56,10 @@ std::string timestamp() {
     // get a precise timestamp as a string
     const auto now = std::chrono::system_clock::now();
     const auto nowAsTimeT = std::chrono::system_clock::to_time_t(now);
-    const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           now.time_since_epoch()) %
-                       1000;
+    const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
     std::stringstream sss;
-    sss << std::put_time(std::localtime(&nowAsTimeT), "%a %b %d %Y %T") << '.'
-        << std::setfill('0') << std::setw(3) << nowMs.count();
+    sss << std::put_time(std::localtime(&nowAsTimeT), "%a %b %d %Y %T") << '.' << std::setfill('0') << std::setw(3)
+        << nowMs.count();
     return sss.str();
 }
 namespace rx {
@@ -111,7 +104,8 @@ class observable {
     void subscribe_impl(const completer_t &obj) { _completers.push_back(obj); }
 
   public:
-    observable(subscribe_callback fun) : _subscribe_callback(fun) {}
+    observable(subscribe_callback fun)
+        : _subscribe_callback(fun) {}
 
     observable(const observable &other)
         : _subscribe_callback(other._subscribe_callback) {}
@@ -156,21 +150,20 @@ class observable {
     template <typename Period>
     auto debounce(const Period &timeout) {
         using clock_t = std::chrono::steady_clock;
-        return make_shared_observable<T>(
-            [this, timeout](const observer_t &obs) {
-                auto last_time = clock_t::now();
-                bool is_first = true;
-                this->subscribe([=, &last_time, &is_first](const T &value) {
-                    // when a new value comes in, check if the previous value
-                    // arrived before the `timeout` if it didn't -> emit new
-                    // value
-                    auto current_time = clock_t::now();
-                    if (current_time - last_time < timeout) {
-                        obs(value);
-                    }
-                    last_time = current_time;
-                });
+        return make_shared_observable<T>([this, timeout](const observer_t &obs) {
+            auto last_time = clock_t::now();
+            bool is_first = true;
+            this->subscribe([=, &last_time, &is_first](const T &value) {
+                // when a new value comes in, check if the previous value
+                // arrived before the `timeout` if it didn't -> emit new
+                // value
+                auto current_time = clock_t::now();
+                if (current_time - last_time < timeout) {
+                    obs(value);
+                }
+                last_time = current_time;
             });
+        });
     }
 
     template <typename F>
@@ -184,50 +177,46 @@ class observable {
 
     template <typename U>
     auto scan(U s, std::function<U(U, const T &)> accumulator) {
-        return make_shared_observable<U>(
-            [this, s, accumulator](std::function<void(const U &)> on_next) {
-                U seed = s;
-                this->subscribe(
-                    [&seed, accumulator, on_next](const T &value) {
-                        seed = accumulator(seed, value);
-                        on_next(seed);
-                    },
-                    [seed, on_next]() {
-                        on_next(seed);
-                    });
-            });
+        return make_shared_observable<U>([this, s, accumulator](std::function<void(const U &)> on_next) {
+            U seed = s;
+            this->subscribe(
+                [&seed, accumulator, on_next](const T &value) {
+                    seed = accumulator(seed, value);
+                    on_next(seed);
+                },
+                [seed, on_next]() {
+                    on_next(seed);
+                });
+        });
     }
 
     template <typename Duration>
     auto time_interval() {
-        return make_shared_observable<Duration>(
-            [this](std::function<void(const Duration &)> on_next) {
-                using clock_t = std::chrono::steady_clock;
-                auto lastTime = clock_t::now();
-                this->subscribe([on_next, &lastTime](const T &value) {
-                    auto currentTime = clock_t::now();
-                    on_next(std::chrono::duration_cast<Duration>(currentTime -
-                                                                 lastTime));
-                    lastTime = currentTime;
-                });
+        return make_shared_observable<Duration>([this](std::function<void(const Duration &)> on_next) {
+            using clock_t = std::chrono::steady_clock;
+            auto lastTime = clock_t::now();
+            this->subscribe([on_next, &lastTime](const T &value) {
+                auto currentTime = clock_t::now();
+                on_next(std::chrono::duration_cast<Duration>(currentTime - lastTime));
+                lastTime = currentTime;
             });
+        });
     }
 
     template <typename F>
     auto reduce(F &&fun, T seed = T{0}) {
-        return make_shared_observable<T>(
-            [this, fun, seed](const observer_t &obs) {
-                T result = seed;
-                this->subscribe(
-                    // next
-                    [=, &result](const T &t) {
-                        result = fun(result, t);
-                    },
-                    // completed
-                    [&] {
-                        obs(result);
-                    });
-            });
+        return make_shared_observable<T>([this, fun, seed](const observer_t &obs) {
+            T result = seed;
+            this->subscribe(
+                // next
+                [=, &result](const T &t) {
+                    result = fun(result, t);
+                },
+                // completed
+                [&] {
+                    obs(result);
+                });
+        });
     }
 
     auto distinct() {
@@ -268,14 +257,13 @@ class observable {
         return make_shared_observable<T>([this, n](const observer_t &obs) {
             size_t count = 0;
             bool has_completed = false;
-            this->subscribe(
-                [this, &count, obs, n, &has_completed](const T &value) {
-                    obs(value);
-                    if (++count >= n) {
-                        has_completed = true;
-                        throw on_complete();
-                    }
-                });
+            this->subscribe([this, &count, obs, n, &has_completed](const T &value) {
+                obs(value);
+                if (++count >= n) {
+                    has_completed = true;
+                    throw on_complete();
+                }
+            });
         });
     }
     auto average() {
@@ -388,7 +376,8 @@ class observable {
                 },
                 [on_next, &buffer] {
                     // clear out any remainders
-                    on_next(rx::from(buffer));
+                    if (buffer.size() > 0)
+                        on_next(rx::from(buffer));
                 });
         });
     }
@@ -414,11 +403,9 @@ class observable {
     }
 
     template <typename U>
-    auto if_then_else(std::function<bool(const T &)> predicate,
-                      const refcount_ptr<observable<U>> &then_,
+    auto if_then_else(std::function<bool(const T &)> predicate, const refcount_ptr<observable<U>> &then_,
                       const refcount_ptr<observable<U>> &else_) {
-        return make_shared_observable<U>([this, predicate, then_,
-                                          else_](observer<U> on_next) {
+        return make_shared_observable<U>([this, predicate, then_, else_](observer<U> on_next) {
             this->subscribe([predicate, then_, else_, on_next](const T &value) {
                 if (predicate(value)) {
                     then_->subscribe(on_next);
@@ -446,8 +433,7 @@ class observable {
 
     template <typename Predicate>
     auto skip_while(Predicate predicate) {
-        return make_shared_observable<T>([this, predicate](
-                                             const observer_t &on_next) {
+        return make_shared_observable<T>([this, predicate](const observer_t &on_next) {
             bool is_skipping = true;
             this->subscribe([predicate, on_next, &is_skipping](const T &value) {
                 if (is_skipping && predicate(value)) {
@@ -461,62 +447,58 @@ class observable {
 
     template <typename Predicate>
     auto all(Predicate predicate) {
-        return make_shared_observable<bool>(
-            [this, predicate](const observer_t &on_next) {
-                bool ret = true;
-                this->subscribe(
-                    [predicate, on_next, &ret](const T &value) {
-                        if (!predicate(value)) {
-                            ret = false;
-                            throw on_complete();
-                        }
-                    },
-                    [on_next, &ret]() {
-                        on_next(ret);
-                    });
-            });
+        return make_shared_observable<bool>([this, predicate](const observer_t &on_next) {
+            bool ret = true;
+            this->subscribe(
+                [predicate, on_next, &ret](const T &value) {
+                    if (!predicate(value)) {
+                        ret = false;
+                        throw on_complete();
+                    }
+                },
+                [on_next, &ret]() {
+                    on_next(ret);
+                });
+        });
     }
 
     template <typename U = size_t>
     auto count() {
-        return make_shared_observable<size_t>(
-            [this](const observer<U> &on_next) {
-                U count = 0;
-                this->subscribe(
-                    [&count](const T &t) {
-                        count++;
-                    },
-                    [on_next, &count] {
-                        on_next(count);
-                    });
-            });
+        return make_shared_observable<size_t>([this](const observer<U> &on_next) {
+            U count = 0;
+            this->subscribe(
+                [&count](const T &t) {
+                    count++;
+                },
+                [on_next, &count] {
+                    on_next(count);
+                });
+        });
     }
 
     template <typename U>
     auto to(std::function<U(const T &)> mapper) {
-        return make_shared_observable<U>(
-            [this, mapper](std::function<void(const U &)> on_next) {
-                this->subscribe([mapper, on_next](const T &value) {
-                    on_next(mapper(value));
-                });
+        return make_shared_observable<U>([this, mapper](std::function<void(const U &)> on_next) {
+            this->subscribe([mapper, on_next](const T &value) {
+                on_next(mapper(value));
             });
+        });
     }
 
     template <typename Container>
     auto to_iterable() {
-        return make_shared_observable<Container>(
-            [this](observer<Container> on_next) {
-                Container res;
-                auto o_first = std::back_inserter(res);
+        return make_shared_observable<Container>([this](observer<Container> on_next) {
+            Container res = {};
+            auto o_first = std::back_inserter(res);
 
-                this->subscribe(
-                    [&o_first](const T &t) {
-                        *o_first++ = t;
-                    },
-                    [on_next, &res] {
-                        on_next(res);
-                    });
-            });
+            this->subscribe(
+                [&o_first](const T &t) {
+                    *o_first++ = t;
+                },
+                [on_next, &res] {
+                    on_next(res);
+                });
+        });
     }
 
     template <typename U, typename... Ts>
@@ -563,12 +545,11 @@ static auto repeat(T value, size_t count) {
 template <typename Iterable>
 auto from(Iterable iterable) {
     using T = typename std::remove_reference<decltype(*iterable.begin())>::type;
-    return make_shared_observable<T>(
-        [iterable](const typename observable<T>::observer_t next) {
-            for (auto i : iterable) {
-                next(i);
-            }
-        });
+    return make_shared_observable<T>([iterable](const typename observable<T>::observer_t next) {
+        for (auto i : iterable) {
+            next(i);
+        }
+    });
 }
 
 template <typename... Ts>
@@ -601,18 +582,17 @@ auto start(Fun &&factory) {
 template <typename T, typename Traits = std::char_traits<T>>
 static auto from_istream(std::basic_istream<T, Traits> &iss) {
     using char_type = typename std::basic_istream<T, Traits>::char_type;
-    return make_shared_observable<char_type>(
-        [&iss](const observer<char_type> &on_next) {
-            while (!iss.eof() && !iss.bad()) {
-                T value;
-                iss >> value;
-                if (iss.fail()) {
-                    break;
-                }
-                on_next(value);
+    return make_shared_observable<char_type>([&iss](const observer<char_type> &on_next) {
+        while (!iss.eof() && !iss.bad()) {
+            T value;
+            iss >> value;
+            if (iss.fail()) {
+                break;
             }
-            throw on_complete();
-        });
+            on_next(value);
+        }
+        throw on_complete();
+    });
 }
 
 } // namespace rx
