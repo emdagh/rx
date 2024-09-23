@@ -89,15 +89,14 @@ class observable {
 
   private:
     bool _is_completed = false;
+    // uint8_t _padding;
     subscribe_callback _subscribe_callback;
-
     std::vector<completer_t> _completers;
 
     void subscribe_impl(const observer_t &obj) {
         try {
             _subscribe_callback(obj);
-        } catch (on_complete &oc) {
-            this->_is_completed = true;
+        } catch (const on_complete &oc) {
             return;
         }
     }
@@ -109,20 +108,11 @@ class observable {
 
     observable(const observable &other)
         : _subscribe_callback(other._subscribe_callback)
-        , _completers(other._completers)
-        , _is_completed(other._is_completed) {}
-
-    virtual ~observable() {
-        // DEBUG_METHOD();
+        , _completers(other._completers) {
+        DEBUG_METHOD();
     }
 
-    observable &operator=(const observable &other) const {
-        observable copy(other);
-        std::swap(copy, *this);
-        return *this;
-    }
-
-    bool is_completed() const { return _is_completed; }
+    virtual ~observable() {}
 
     template <typename... Ts>
     void subscribe(Ts &&...ts) {
@@ -146,7 +136,7 @@ class observable {
     template <typename Period>
     auto delay(const Period &a_while) {
 
-        return make_shared_observable<T>([=](const observer_t &obs) {
+        return make_shared_observable<T>([this, a_while](const observer_t &obs) {
             std::this_thread::sleep_for(a_while);
             this->subscribe([=](const T &t) {
                 obs(t);
@@ -366,7 +356,7 @@ class observable {
         using U = refcount_ptr<observable<T>>; // std::vector<T>;
         using clock_t = std::chrono::steady_clock;
 
-        return make_shared_observable<U>([this, duration](observer<U> on_next) {
+        return make_shared_observable<U>([this, duration](const observer<U> &on_next) {
             std::vector<T> buffer = {};
 
             auto when = clock_t::now() + duration;
@@ -527,6 +517,7 @@ static auto defer(std::function<observable<T>()> factory) {
     return make_shared_observable<T>([factory](const observer<T> &on_next) {
         factory().subscribe(on_next);
     });
+    throw on_complete();
 }
 
 template <typename T, typename Period>
@@ -538,6 +529,7 @@ static auto interval(const Period &a_while) {
             next(count++);
             std::this_thread::sleep_for(a_while);
         }
+        throw on_complete();
     });
 }
 template <typename T>
@@ -546,6 +538,7 @@ static auto repeat(T value, size_t count) {
         for (size_t i = 0; i < count; i++) {
             next(value);
         }
+        throw on_complete();
     });
 }
 
@@ -556,6 +549,7 @@ auto from(Iterable iterable) {
         for (auto i : iterable) {
             next(i);
         }
+        throw on_complete();
     });
 }
 
@@ -567,6 +561,7 @@ auto of(Ts &&...ts) {
         for (auto i : list) {
             next(i);
         }
+        throw on_complete();
     });
 }
 template <typename T>
@@ -575,6 +570,7 @@ static auto range(T start, T count) {
         for (T i = start; i < start + count; ++i) {
             obs(i);
         }
+        throw on_complete();
     });
 }
 
@@ -584,6 +580,7 @@ auto start(Fun &&factory) {
     return make_shared_observable<T>([factory](const observer<T> &on_next) {
         on_next(factory());
     });
+    throw on_complete();
 }
 
 template <typename T, typename Traits = std::char_traits<T>>

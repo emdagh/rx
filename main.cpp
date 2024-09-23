@@ -100,7 +100,6 @@ int main() {
         DEBUG_VALUE_AND_TYPE_OF(c);
     });
     DEBUG_MESSAGE("-----------------------------");
-
     rx::of(1, 2, 3, 4, 5, 6)
         ->flat_map<int>([](auto i) {
             return rx::of(i)->delay(100ms);
@@ -118,12 +117,9 @@ int main() {
                 });
                 DEBUG_VALUE_AND_TYPE_OF(vec);
 #else
-                win->to_iterable<std::vector<int>>()->subscribe(
-                    [](auto value) {
-                        DEBUG_VALUE_AND_TYPE_OF(value);
-                    },
-                    [] {
-                    });
+                win->to_iterable<std::vector<int>>()->subscribe([&](const std::vector<int> &value) {
+                    DEBUG_VALUE_AND_TYPE_OF(value);
+                });
         // this causes a SIGSEGV somehow..
         // next->to_iterable<std::vector<int>>()->subscribe([](auto window_value) {
         //    DEBUG_VALUE_AND_TYPE_OF(window_value);
@@ -134,6 +130,7 @@ int main() {
                 DEBUG_MESSAGE("windowing done");
             });
 
+#if 1
     DEBUG_MESSAGE("-----------------------------");
 
     rx::range(1, 10) //<int>(50ms)
@@ -180,5 +177,6 @@ int main() {
         ->subscribe([](auto value) {
             DEBUG_VALUE_OF(value);
         });
+#endif
     return 0;
 }
