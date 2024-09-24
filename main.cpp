@@ -1,3 +1,4 @@
+
 #include "refcount_ptr.hpp"
 #include "rx.hpp"
 #include <atomic>
@@ -58,7 +59,7 @@ struct tcp_accept {
 };
 
 auto tcp_listener(uint16_t port) {
-    return rx::make_shared_observable<std::string>([port](const rx::observer<std::string> &on_next) {
+    return rx::make_observable<std::string>([port](const rx::observer<std::string> &on_next) {
         int sock = socket(AF_INET, SOCK_STREAM, 0);
         int option = 1;
         setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
@@ -99,36 +100,54 @@ int main() {
     rx::from_istream<char>(ifs)->to_iterable<std::string>()->subscribe([](auto c) {
         DEBUG_VALUE_AND_TYPE_OF(c);
     });
-    DEBUG_MESSAGE("-----------------------------");
+    DEBUG_MESSAGE("-buffer with time------------");
+    rx::of(1, 2, 3, 4, 5, 6)
+        ->flat_map<int>([](auto i) {
+            return rx::of(i)->delay(100ms);
+        })
+        ->buffer_with_time(250ms)
+        ->subscribe([](auto value) {
+            DEBUG_VALUE_AND_TYPE_OF(value);
+        });
+    DEBUG_MESSAGE("-window----------------------");
     rx::of(1, 2, 3, 4, 5, 6)
         ->flat_map<int>([](auto i) {
             return rx::of(i)->delay(100ms);
         })
         ->window(250ms)
-        ->subscribe(
-            [](const rx::shared_observable<int> &win) {
-                DEBUG_MESSAGE("new window");
-#if 1
-                std::vector<int> vec = {};
-                auto o_first = std::back_inserter(vec);
-                win->subscribe([&o_first](auto value) {
-                    // vec.push_back(window_value);
-                    *o_first++ = value;
-                });
-                DEBUG_VALUE_AND_TYPE_OF(vec);
-#else
-                win->to_iterable<std::vector<int>>()->subscribe([&](const std::vector<int> &value) {
-                    DEBUG_VALUE_AND_TYPE_OF(value);
-                });
-        // this causes a SIGSEGV somehow..
-        // next->to_iterable<std::vector<int>>()->subscribe([](auto window_value) {
-        //    DEBUG_VALUE_AND_TYPE_OF(window_value);
-        //});
-#endif
-            },
-            [] {
-                DEBUG_MESSAGE("windowing done");
+        ->subscribe([](refcount_ptr<rx::observable<int>> value) {
+            // value->to_iterable<std::vector<int>>();
+            std::vector<int> container = {};
+            value->subscribe([&](auto inner) {
+                // DEBUG_VALUE_AND_TYPE_OF(container);
+                container.push_back(inner);
             });
+            DEBUG_VALUE_AND_TYPE_OF(container);
+        });
+    //        ->subscribe(
+    //            [](const rx::shared_observable<int> &win) {
+    //                DEBUG_MESSAGE("new window");
+    //#if 0
+    //                std::vector<int> vec = {};
+    //                auto o_first = std::back_inserter(vec);
+    //                win->subscribe([&o_first](auto value) {
+    //                    // vec.push_back(window_value);
+    //                    *o_first++ = value;
+    //                });
+    //                DEBUG_VALUE_AND_TYPE_OF(vec);
+    //#else
+    //                win->to_iterable<std::vector<int>>()->subscribe([](const std::vector<int> &value) {
+    //                    DEBUG_VALUE_AND_TYPE_OF(value);
+    //                });
+    // this causes a SIGSEGV somehow..
+    // next->to_iterable<std::vector<int>>()->subscribe([](auto window_value) {
+    //    DEBUG_VALUE_AND_TYPE_OF(window_value);
+    //});
+    //#endif
+    //},
+    //            [] {
+    //    DEBUG_MESSAGE("windowing done");
+    //            });
 
 #if 1
     DEBUG_MESSAGE("-----------------------------");
