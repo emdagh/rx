@@ -1,6 +1,6 @@
 #pragma once
 
-#include "refcount_ptr.hpp"
+#include "refc_ptr.hpp"
 #include <atomic>
 #include <chrono>
 #include <ctime>
@@ -42,15 +42,6 @@ std::ostream &operator<<(std::ostream &os, const std::chrono::duration<Rep, Peri
     os << duration.count();
     return os;
 }
-template <typename T>
-std::ostream &operator<<(std::ostream &os, const std::optional<T> &v) {
-    if (v.has_value()) {
-        os << v.value();
-    } else {
-        os << "null";
-    }
-    return os;
-}
 
 std::string timestamp() {
     // get a precise timestamp as a string
@@ -78,7 +69,7 @@ template <typename T>
 class observable;
 
 template <typename T>
-using shared_observable = refcount_ptr<observable<T>>;
+using shared_observable = refc_ptr<observable<T>>;
 
 template <typename T>
 class observable {
@@ -86,10 +77,9 @@ class observable {
     using observer_t = observer<T>;
     using completer_t = std::function<void()>;
     using subscribe_callback = std::function<void(const observer_t &)>;
+    int _;
 
   private:
-    // bool _is_completed = false;
-    uint8_t _padding;
     subscribe_callback _subscribe_callback;
     std::vector<completer_t> _completers;
 
@@ -106,18 +96,14 @@ class observable {
     observable(subscribe_callback fun)
         : _subscribe_callback(fun) {}
 
-    observable(const observable &other)
-        : _subscribe_callback(other._subscribe_callback)
-        , _completers(other._completers) {}
+    observable(const observable &other) = delete;
+//    : _subscribe_callback(other._subscribe_callback)
+//        , _completers(other._completers) {}
+    observable(observable&&) = delete;
+    observable& operator = (const observable&) = delete;
 
     virtual ~observable() {
         // DEBUG_METHOD();
-    }
-
-    observable &operator=(const observable &other) const {
-        observable copy(other);
-        std::swap(copy, *this);
-        return *this;
     }
 
     template <typename... Ts>
@@ -292,14 +278,11 @@ class observable {
         });
     }
 
-    template <typename U>
-    using Mapper = std::function<refcount_ptr<observable<U>>(const T &)>;
-
-    template <typename U>
-    auto flat_map(Mapper<U> mapper) {
-        return make_observable<U>([this, mapper](observer<U> next) {
+    template <typename U, typename Fun>
+    auto flat_map(Fun &&mapper) { // Mapper<U> mapper) {
+        return make_observable<U>([this, mapper](const observer<U> &next) {
             this->subscribe([mapper, next](const T &value) {
-                return mapper(value)->subscribe(next);
+                mapper(value)->subscribe(next);
             });
         });
     }
@@ -309,7 +292,7 @@ class observable {
         using U = std::vector<T>;
         using clock_t = std::chrono::steady_clock;
 
-        return make_observable<U>([this, period](observer<U> on_next) {
+        return make_observable<U>([this, period](const observer<U> &on_next) {
             U buffer = {};
 
             auto when = clock_t::now() + period;
@@ -337,7 +320,7 @@ class observable {
     auto buffer_with_count(size_t n) {
         using U = std::vector<T>;
 
-        return make_observable<U>([this, n](observer<U> on_next) {
+        return make_observable<U>([this, n](const observer<U> &on_next) {
             U buffer = {};
 
             this->subscribe(
@@ -360,7 +343,7 @@ class observable {
 
     template <typename Duration>
     auto window(const Duration &duration) {
-        using U = refcount_ptr<observable<T>>; // std::vector<T>;
+        using U = refc_ptr<observable<T>>; // std::vector<T>;
         using clock_t = std::chrono::steady_clock;
 
         return make_observable<U>([this, duration](const observer<U> &on_next) {
@@ -388,9 +371,9 @@ class observable {
     template <typename KeySelector> //, typename ValueSelector>
     auto group_by(KeySelector key_for) {
         using U = std::vector<T>;
-        using Y = refcount_ptr<observable<T>>; // std::optional<std::pair<T,
-                                               // U>>;
-        return make_observable<Y>([this, key_for](observer<Y> on_next) {
+        using Y = refc_ptr<observable<T>>; // std::optional<std::pair<T,
+                                           // U>>;
+        return make_observable<Y>([this, key_for](const observer<Y> &on_next) {
             std::unordered_map<T, U> buffer = {};
 
             this->subscribe(
@@ -406,9 +389,9 @@ class observable {
     }
 
     template <typename U>
-    auto if_then_else(std::function<bool(const T &)> predicate, const refcount_ptr<observable<U>> &then_,
-                      const refcount_ptr<observable<U>> &else_) {
-        return make_observable<U>([this, predicate, then_, else_](observer<U> on_next) {
+    auto if_then_else(std::function<bool(const T &)> predicate, const refc_ptr<observable<U>> &then_,
+                      const refc_ptr<observable<U>> &else_) {
+        return make_observable<U>([this, predicate, then_, else_](const observer<U> &on_next) {
             this->subscribe([predicate, then_, else_, on_next](const T &value) {
                 if (predicate(value)) {
                     then_->subscribe(on_next);
@@ -490,7 +473,7 @@ class observable {
 
     template <typename Container>
     auto to_iterable() {
-        return make_observable<Container>([this](observer<Container> on_next) {
+        return make_observable<Container>([this](const observer<Container> &on_next) {
             Container res = {};
             auto o_first = std::back_inserter(res);
 
@@ -506,16 +489,14 @@ class observable {
 
     template <typename U, typename... Ts>
     static auto make_observable(Ts &&...args) {
-        return make_refcount_ptr<observable<U>>(std::forward<Ts>(args)...);
+        return make_refc_ptr<observable<U>>(std::forward<Ts>(args)...);
     }
 }; // observable
 
 // helper
 template <typename T, typename... Args>
 static auto make_observable(Args &&...args) {
-    return make_refcount_ptr<observable<T>>(std::forward<Args>(args)...);
-    // return observable<T>::template make_observable<T>(
-    //     std::forward<Args>(args)...);
+    return make_refc_ptr<observable<T>>(std::forward<Args>(args)...);
 }
 
 template <typename T>
@@ -562,7 +543,7 @@ auto from(Iterable iterable) {
 template <typename... Ts>
 auto of(Ts &&...ts) {
     using T = typename std::common_type<Ts...>::type;
-    return make_observable<T>([ts...](observer<T> next) {
+    return make_observable<T>([ts...](const observer<T> &next) {
         std::initializer_list<T> list{(ts)...};
         for (auto i : list) {
             next(i);

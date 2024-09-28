@@ -1,5 +1,5 @@
 
-#include "refcount_ptr.hpp"
+#include "refc_ptr.hpp"
 #include "rx.hpp"
 #include <atomic>
 #include <chrono>
@@ -115,11 +115,9 @@ int main() {
             return rx::of(i)->delay(100ms);
         })
         ->window(250ms)
-        ->subscribe([](refcount_ptr<rx::observable<int>> value) {
-            // value->to_iterable<std::vector<int>>();
+        ->subscribe([](const auto &value) {
             std::vector<int> container = {};
             value->subscribe([&](auto inner) {
-                // DEBUG_VALUE_AND_TYPE_OF(container);
                 container.push_back(inner);
             });
             DEBUG_VALUE_AND_TYPE_OF(container);
@@ -150,12 +148,12 @@ int main() {
     //            });
 
 #if 1
-    DEBUG_MESSAGE("-----------------------------");
+    DEBUG_MESSAGE("-flat_map.and.group_by-------");
 
     rx::range(1, 10) //<int>(50ms)
                      //->take(10)   // 500ms
         ->flat_map<int>([](auto i) {
-            return rx::of(i)->delay(100ms);
+            return rx::of(i, i * i)->delay(100ms);
         })
         ->group_by([](auto key) {
             return key & 1;
