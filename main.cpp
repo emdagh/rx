@@ -1,4 +1,4 @@
-
+#include <list>
 #include "refc_ptr.hpp"
 #include "rx.hpp"
 #include <atomic>
@@ -21,6 +21,76 @@
 #include <vector>
 
 using namespace std::literals;
+
+template <typename T>
+class subject : public rx::observable<T> {
+    std::vector<rx::observer<T>> _observables;
+
+  public:
+    subject()
+        : rx::observable<T>([this](const rx::observer<T> &obs) {
+            _observables.push_back(obs);
+        }) {}
+
+    void on_next(const T &t) {
+        for (const auto &next : _observables) {
+            next(t);
+        }
+    }
+
+    void on_completed() {}
+
+    void on_error(const std::exception_ptr &ep) {}
+};
+
+template <typename T>
+class behavior_subject : public rx::observable<T> {
+    T _current;
+    std::vector<rx::observer<T>> _lst;
+
+  public:
+    explicit behavior_subject(const T &t)
+        : _current(t)
+        , rx::observable<T>([this](const rx::observer<T> &obs) {
+            obs(_current);
+            _lst.push_back(obs);
+        }) {
+        }
+    virtual ~behavior_subject() {}
+    virtual void on_next(const T& t) {
+        _current = t;
+        for(auto& next : _lst) {
+            next(t);
+        }
+    }
+};
+
+template <typename T>
+class replay_subject : public rx::observable<T> {
+    size_t _len;
+    std::list<T> _q;
+    std::vector<rx::observer<T>> _lst;
+public:
+    replay_subject(size_t buf_len) 
+        : rx::observable<T>([this] (const rx::observer<T>& obs) {
+            for(auto& item : _q) {
+                obs(item);
+            }
+            _lst.push_back(obs);
+        })
+        , _len(buf_len) {}
+    virtual ~replay_subject() {}
+
+    virtual void on_next(const T& t) {
+        _q.push_back(t);
+        if(_q.size() > _len) {
+            _q.pop_front();
+        }
+        for(auto& next : _lst) {
+            next(t);
+        }
+    }
+};
 
 template <typename F>
 void call_async(F &&fun) {
@@ -91,6 +161,48 @@ auto tcp_listener(uint16_t port) {
 #include <fstream>
 
 int main() {
+
+    subject<int> sub;
+    sub.subscribe(
+        [](int x) {
+            DEBUG_VALUE_AND_TYPE_OF(x);
+        },
+        [](int y) {
+            DEBUG_VALUE_AND_TYPE_OF(y);
+        });
+    sub.on_next(0);
+    sub.on_next(1);
+    sub.on_next(2);
+
+    behavior_subject<int> bs(1337);
+    bs.subscribe([] (int z) {
+            DEBUG_VALUE_AND_TYPE_OF(z);
+            });
+    bs.on_next(1338);
+    bs.subscribe([] (int a) {
+        DEBUG_VALUE_AND_TYPE_OF(a);
+    });
+
+    replay_subject<int> rs(3);
+    rs.subscribe([] (int n) {
+            DEBUG_VALUE_AND_TYPE_OF(n);
+            });
+
+    rs.on_next(1);
+    rs.on_next(2);
+    rs.on_next(3);
+
+    rs.subscribe([] (int m) {
+            DEBUG_VALUE_AND_TYPE_OF(m);
+            });
+
+    rs.on_next(4);
+    rs.subscribe([] (int o) {
+            DEBUG_VALUE_AND_TYPE_OF(o);
+            });
+
+
+    exit(-2);
 
     // tcp_listener(5557)->take(1)->subscribe(
     //     [](const std::string &str) { DEBUG_VALUE_OF(str); });
