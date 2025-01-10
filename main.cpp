@@ -1,4 +1,4 @@
-#if 1
+#if 0
 
 #include <cstdint>
 #include <cstdio>
@@ -312,8 +312,6 @@ int main() {
         DEBUG_VALUE_AND_TYPE_OF(o);
     });
 
-    exit(-2);
-
     // tcp_listener(5557)->take(1)->subscribe(
     //     [](const std::string &str) { DEBUG_VALUE_OF(str); });
 
@@ -322,101 +320,101 @@ int main() {
     // rx::from_istream<char>(ifs)->to_iterable<std::string>()->subscribe([](auto c) {
     //     DEBUG_VALUE_AND_TYPE_OF(c);
     // });
-    // DEBUG_MESSAGE("-buffer with time------------");
-    // rx::of(1, 2, 3, 4, 5, 6)
-    //     ->flat_map<int>([](auto i) {
-    //         return rx::of(i)->delay(100ms);
-    //     })
-    //     ->buffer_with_time(250ms)
-    //     ->subscribe([](auto value) {
-    //         DEBUG_VALUE_AND_TYPE_OF(value);
-    //     });
-    // DEBUG_MESSAGE("-window----------------------");
-    // rx::of(1, 2, 3, 4, 5, 6)
-    //     ->flat_map<int>([](auto i) {
-    //         return rx::of(i)->delay(100ms);
-    //     })
-    //     ->window(250ms)
-    //     ->subscribe([](const auto &value) {
-    //         std::vector<int> container = {};
-    //         value->subscribe([&](auto inner) {
-    //             container.push_back(inner);
-    //         });
-    //         DEBUG_VALUE_AND_TYPE_OF(container);
-    //     });
-    ////        ->subscribe(
-    ////            [](const rx::shared_observable<int> &win) {
-    ////                DEBUG_MESSAGE("new window");
-    ////#if 0
-    ////                std::vector<int> vec = {};
-    ////                auto o_first = std::back_inserter(vec);
-    ////                win->subscribe([&o_first](auto value) {
-    ////                    // vec.push_back(window_value);
-    ////                    *o_first++ = value;
-    ////                });
-    ////                DEBUG_VALUE_AND_TYPE_OF(vec);
-    ////#else
-    ////                win->to_iterable<std::vector<int>>()->subscribe([](const std::vector<int> &value) {
-    ////                    DEBUG_VALUE_AND_TYPE_OF(value);
-    ////                });
-    //// this causes a SIGSEGV somehow..
-    //// next->to_iterable<std::vector<int>>()->subscribe([](auto window_value) {
-    ////    DEBUG_VALUE_AND_TYPE_OF(window_value);
-    ////});
-    ////#endif
-    ////},
-    ////            [] {
-    ////    DEBUG_MESSAGE("windowing done");
-    ////            });
-
-    // #if 1
-    //  DEBUG_MESSAGE("-flat_map.and.group_by-------");
-
-    // rx::range(1, 10) //<int>(50ms)
-    //                  //->take(10)   // 500ms
-    //     ->flat_map<int>([](auto i) {
-    //         return rx::of(i, i * i)->delay(100ms);
-    //     })
-    //     ->group_by([](auto key) {
-    //         return key & 1;
-    //     })
-    //     ->subscribe(
-    //         [](const rx::shared_observable<int> &obs) {
-    //             DEBUG_MESSAGE("new group");
-    //             obs->to_iterable<std::vector<int>>()->subscribe([](auto value) {
-    //                 DEBUG_VALUE_AND_TYPE_OF(value);
-    //             });
-    //         },
-    //         []() {
-    //             std::cout << "count done!" << std::endl;
-    //         });
-    // DEBUG_MESSAGE("-----------------------------");
-    // rx::range(1, 10)
-    //     ->flat_map<int>([](auto val) {
-    //         return rx::of(val)->delay(10ms)->first()->map([](auto value) {
-    //             return value * value;
-    //         });
-    //     })
-    //     ->subscribe(
-    //         [](int value) {
-    //             DEBUG_VALUE_OF(value);
-    //         },
-    //         [] {
-    //             DEBUG_VALUE_OF("Sequence complete!");
-    //         });
-    // DEBUG_MESSAGE("-----------------------------");
-
-    // std::map<int, std::chrono::milliseconds> times = {{0, 100ms}, {1, 600ms}, {2, 400ms}, {3, 700ms}, {4, 200ms}};
-
-    // rx::from(times)
-    //     ->flat_map<int>([](const auto &time) {
-    //         return rx::of(time.first)->delay(time.second);
-    //     }) // 0, 2, 4
-    //     ->debounce(500ms)
-    //     ->subscribe([](auto value) {
-    //         DEBUG_VALUE_OF(value);
-    //     });
+    DEBUG_MESSAGE("-buffer with time------------");
+    rx::of(1, 2, 3, 4, 5, 6)
+        ->flat_map<int>([](auto i) {
+            return rx::of(i)->delay(100ms);
+        })
+        ->buffer_with_time(250ms)
+        ->subscribe([](auto value) {
+            DEBUG_VALUE_AND_TYPE_OF(value);
+        });
+    DEBUG_MESSAGE("-window----------------------");
+    rx::of(1, 2, 3, 4, 5, 6)
+        ->flat_map<int>([](auto i) {
+            return rx::of(i)->delay(100ms);
+        })
+        ->window(250ms)
+        ->subscribe([](const auto &value) {
+            std::vector<int> container = {};
+            value->subscribe([&](auto inner) {
+                container.push_back(inner);
+            });
+            DEBUG_VALUE_AND_TYPE_OF(container);
+        });
+    //        ->subscribe(
+    //            [](const rx::shared_observable<int> &win) {
+    //                DEBUG_MESSAGE("new window");
+    // #if 0
+    //                std::vector<int> vec = {};
+    //                auto o_first = std::back_inserter(vec);
+    //                win->subscribe([&o_first](auto value) {
+    //                    // vec.push_back(window_value);
+    //                    *o_first++ = value;
+    //                });
+    //                DEBUG_VALUE_AND_TYPE_OF(vec);
+    // #else
+    //                win->to_iterable<std::vector<int>>()->subscribe([](const std::vector<int> &value) {
+    //                    DEBUG_VALUE_AND_TYPE_OF(value);
+    //                });
+    // this causes a SIGSEGV somehow..
+    // next->to_iterable<std::vector<int>>()->subscribe([](auto window_value) {
+    //    DEBUG_VALUE_AND_TYPE_OF(window_value);
+    //});
     // #endif
+    //},
+    //            [] {
+    //    DEBUG_MESSAGE("windowing done");
+    //            });
+
+#if 1
+    DEBUG_MESSAGE("-flat_map.and.group_by-------");
+
+    rx::range(1, 10) //<int>(50ms)
+                     //->take(10)   // 500ms
+        ->flat_map<int>([](auto i) {
+            return rx::of(i, i * i)->delay(100ms);
+        })
+        ->group_by([](auto key) {
+            return key & 1;
+        })
+        ->subscribe(
+            [](const rx::shared_observable<int> &obs) {
+                DEBUG_MESSAGE("new group");
+                obs->to_iterable<std::vector<int>>()->subscribe([](auto value) {
+                    DEBUG_VALUE_AND_TYPE_OF(value);
+                });
+            },
+            []() {
+                std::cout << "count done!" << std::endl;
+            });
+    DEBUG_MESSAGE("-----------------------------");
+    rx::range(1, 10)
+        ->flat_map<int>([](auto val) {
+            return rx::of(val)->delay(10ms)->first()->map([](auto value) {
+                return value * value;
+            });
+        })
+        ->subscribe(
+            [](int value) {
+                DEBUG_VALUE_OF(value);
+            },
+            [] {
+                DEBUG_VALUE_OF("Sequence complete!");
+            });
+    DEBUG_MESSAGE("-----------------------------");
+
+    std::map<int, std::chrono::milliseconds> times = {{0, 100ms}, {1, 600ms}, {2, 400ms}, {3, 700ms}, {4, 200ms}};
+
+    rx::from(times)
+        ->flat_map<int>([](const auto &time) {
+            return rx::of(time.first)->delay(time.second);
+        }) // 0, 2, 4
+        ->debounce(500ms)
+        ->subscribe([](auto value) {
+            DEBUG_VALUE_OF(value);
+        });
+#endif
     return 0;
 }
 #endif
